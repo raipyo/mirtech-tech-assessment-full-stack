@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from . import models, database, crud
@@ -30,21 +30,26 @@ def get_db():
 
 @app.get("/products")
 async def read_products(
-    skip: int = 0,
-    limit: int = 50,
-    search: str = None,
-    db: Session = Depends(get_db)
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100000, ge=1, le=100000),
+    search: str = Query(None, max_length=50),
+    db: Session = Depends(database.get_db)
 ):
-    query = db.query(models.Product)
+    try:
+        query = db.query(models.Product)
 
-    if search:
-        query = query.filter(models.Product.name.ilike(f"%{search}%"))
+        if search:
+            query = query.filter(models.Product.name.ilike(f"%{search}%"))
 
-    total = query.count()
+        total = query.count()
 
-    items = query.offset(skip).limit(limit).all()
+        items = query.offset(skip).limit(limit).all()
 
-    return {
-        "items": items,
-        "total": total
-    }
+        return {
+            "items": items,
+            "total": total
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
